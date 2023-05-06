@@ -1,7 +1,8 @@
 # coding=utf-8 
 import os
 import re
-import time
+
+import torch
 import utils
 import commons
 import json
@@ -13,8 +14,9 @@ limitation = os.getenv("SYSTEM") == "spaces"  # limit text and audio length in h
 class Vits:
   hps_ms = None
   device = None
+  models = {}
   @classmethod
-  def get_text(text, hps, is_symbol):
+  def get_text(self,text, hps, is_symbol):
       text_norm, clean_text = text_to_sequence(text, hps.symbols, [] if is_symbol else hps.data.text_cleaners)
       if hps.data.add_blank:
           text_norm = commons.intersperse(text_norm, 0)
@@ -38,14 +40,15 @@ class Vits:
                   text = f"[JA]{text}[JA]"
               else:
                   text = f"{text}"
-          stn_tst = self.get_text(text, self.hps_ms, is_symbol)
+          print(self.hps_ms)
+          stn_tst, clean_text = self.get_text(text, self.hps_ms, is_symbol)
           with no_grad():
               x_tst = stn_tst.unsqueeze(0).to(self.device)
               x_tst_lengths = LongTensor([stn_tst.size(0)]).to(self.device)
               sid = LongTensor([speaker_id]).to(self.device)
               audio = net_g_ms.infer(x_tst, x_tst_lengths, sid=sid, noise_scale=noise_scale, noise_scale_w=noise_scale_w,
                                     length_scale=length_scale)[0][0, 0].data.cpu().float().numpy()
-          return "Success", (22050, audio)
+          return audio
       return tts_fn
   @classmethod
   def create_to_symbol_fn(hps):
@@ -67,6 +70,10 @@ class Vits:
       else:
           return 0.6, 0.668, 1
   @classmethod
+  def generate(self,text,lang,speakerId,name,noise_scale,noise_scale_w,length_scale):
+    tts_fn = self.create_tts_fn(self.models[name],speakerId)
+    return tts_fn(text,lang,noise_scale, noise_scale_w, length_scale, True)
+  @classmethod
   def loadModels(self,device,config_path,models_path,info_path):
     self.hps_ms = utils.get_hparams_from_file(config_path)
     with open(info_path, "r", encoding="utf-8") as f:
@@ -83,3 +90,19 @@ class Vits:
             utils.load_checkpoint(f'{models_path}/{i}/{i}.pth', net_g_ms, None)
             print(f'check loaded {i}')
             _ = net_g_ms.eval().to(device)
+  @classmethod
+  def loadModel(self, device, config_path, model_path,model_name):
+      self.device = torch.device(device)
+      if model_name in self.models:
+        return
+      self.hps_ms = utils.get_hparams_from_file(config_path)
+      net_g_ms = SynthesizerTrn(
+          len(self.hps_ms.symbols),
+          self.hps_ms.data.filter_length // 2 + 1,
+          self.hps_ms.train.segment_size // self.hps_ms.data.hop_length,
+          n_speakers=self.hps_ms.data.n_speakers,
+          **self.hps_ms.model
+      )
+      utils.load_checkpoint(model_path, net_g_ms, None)
+      net_g_ms = net_g_ms.eval().to(device)
+      self.models[model_name] = net_g_ms

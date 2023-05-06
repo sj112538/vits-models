@@ -106,7 +106,7 @@ download_audio_js = """
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--device', type=str, default='cpu')
+    parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--api', action="store_true", default=False)
     parser.add_argument("--share", action="store_true", default=False, help="share gradio app")
     parser.add_argument("--all", action="store_true", default=False, help="enable all models")

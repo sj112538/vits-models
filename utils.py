@@ -1,4 +1,5 @@
 import os
+import socket
 import sys
 import argparse
 import logging
@@ -12,7 +13,7 @@ MATPLOTLIB_FLAG = False
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging
-
+ 
 
 def load_checkpoint(checkpoint_path, model, optimizer=None):
   assert os.path.isfile(checkpoint_path)
